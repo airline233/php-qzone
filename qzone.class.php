@@ -103,7 +103,7 @@ class qzone {
         return $result; //初期先直接返回结果
     }
 
-    private function post ($Path, $Type = 'user', $Params) { 
+    private function post ($Path, $Params, $Type = 'user') { 
         /*
             * 本文件中所有QQ空间相关操作均为POST方式
             * Path: /cgi-bin之后的内容 以/开头
