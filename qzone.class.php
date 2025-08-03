@@ -18,7 +18,7 @@ class qzone {
             * apiaddr: NapCatApi地址 如http://172.16.0.1:5000
             * actk: NapCatApi的token
         */
-        $rt = curl($apiaddr."/getcookies?access_token=$actk",'domain=qzone.qq.com');
+        $rt = $this -> curl($apiaddr."/getcookies?access_token=$actk",'domain=qzone.qq.com');
         if(is_numeric($rt)) return 0;
         $rt = json_decode($rt, true);
         if($rt['status'] != 'ok') return 0;
@@ -26,7 +26,7 @@ class qzone {
         $this -> skey = $this -> cut('skey=',';',$this -> Cookies);
         $this -> pskey = $this -> cut('p_skey=',';',$this -> Cookies);
         $this -> token = $rt['data']['bkn'];
-        $this -> HostUin = json_decode(curl($apiaddr."/get_login_info?access_token=$actk"),1)['data']['user_id'];
+        $this -> HostUin = json_decode($this -> curl($apiaddr."/get_login_info?access_token=$actk"),1)['data']['user_id'];
         return 1;
     }
 
@@ -63,7 +63,7 @@ class qzone {
                 $image = $File;
                 break;
             case 'url':
-                $image = curl($File);
+                $image = $this -> curl($File);
                 if (is_numeric($image)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$image); // 返回HTTP状态码
                 $image = base64_encode($image);
                 break;
