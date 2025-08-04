@@ -53,7 +53,7 @@ class qzone {
             'subrichtype' => null,
             'con' => $Content,
             'feedversion' => '1&ver=1', //这俩应该都不动 写一起了 实际上是两个参数
-            'ugc_right' => 1, //权限 1为所有人可见 64为仅自己可见
+            'ugc_right' => 1, //权限 1为所有人可见 4为好友可见 64为仅自己可见
             'to_sign' => 0,
             'hostuin' => $this -> HostUin, 
             'code_version' => '1&format=fs', //同上
@@ -131,6 +131,57 @@ class qzone {
         return ",$albumid,$lloc,$sloc,$type,$height,$width,,$height,$width";
     }
 
+    public function delete ($Tid) {
+        /*
+            * 删除说说
+            * Tid: publish时返回的tid
+            * 返回：array code:0/1 
+        */
+        $postdata = array(
+            'hostuin' => $this -> HostUin,
+            'tid' => $Tid,
+            't1_source' => '1&code_version=1&format=fs', //应该是不变的，先放一起了
+            'qzreferrer=https%3A%2F%2Fuser.qzone.qq.com%2F'. $this -> HostUin
+        );
+        $result = $this -> post('/emotion_cgi_delete_v6',$postdata);
+        if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result); // 请求失败的话返回HTTP状态码
+        $result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
+        $arr = json_decode($this -> cut("(",");",$result),1);
+        if($arr['subcode'] == 0) return array('code' => 1); //成功时 subcode返回的是0，失败-200
+        return array('code' => 0);
+    }
+
+    public function comment ($Tid, $Content, $RichType = null, $Richval = null) {
+        /*
+            * 评论说说（应该是只能自己的 给别人评论是另外一个api）
+            * Tid: publish时返回的tid
+            * Content: 评论内容
+            * RichType和Richval同publish传入的
+            * 返回：array code:0/1 
+        */
+        $uin = $this -> HostUin;
+        $postdata = array(
+            'uin' => $uin,
+            'hostUin' => $uin,
+            'topicId' => "$uin_$Tid",
+            'commentUin' => $uin,
+            'content' => $Content,
+            'richval' => $Richval,
+            'richtype' => $RichType,
+            //'inCharset=&outCharset=&ref=&', 没有传入的
+            'private' => '=0&with_fwd=0&to_tweet=0', //不变 丢一起了
+            'hostuin' => $uin,
+            'code_version' => '1&format=fs', //丢一起了
+            'qzreferrer' => null //试试不传这个行不行...实在太长了
+        );
+        $result = $this -> post('/emotion_cgi_addcomment_ugc',$postdata);
+        if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result); // 请求失败的话返回HTTP状态码
+        $result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
+        $arr = json_decode($this -> cut("(",");",$result),1);
+        if($arr['subcode'] == 0) return array('code' => 1); //成功时 subcode返回的是0，失败-800（也有可能是其他的）
+        return array('code' => 0,'msg' => $arr['message'],'subcode' => $arr['subcode']);
+    }
+
     private function post ($Path, $Params, $Type = 'user') { 
         /*
             * 本文件中所有QQ空间相关操作均为POST方式
@@ -179,8 +230,8 @@ class qzone {
         curl_close($ch);
         return $content;
       }
-
-    private function cut($begin,$end,$str){
+    
+      private function cut($begin,$end,$str){
         $b = mb_strpos($str,$begin) + mb_strlen($begin);
         $e = mb_strpos($str,$end) - $b;
         return mb_substr($str,$b,$e);
