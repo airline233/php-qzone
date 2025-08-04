@@ -67,15 +67,15 @@ class qzone {
         return $arr['t1_tid'];
     }
 
-    public function upload ($File, $Type = 'base64') {
+    public function upload ($File, $Type = 'base64', $rtType = 'Richval') {
         /*
             * 上传图片
             * File: 图片文件路径/Base64编码字符串/URL
             * Type: 默认为base64，表示File为Base64编码字符串
                     url：表示File为图片URL
                     file：表示File为图片文件路径
-            * 返回值: Richval字符串
-            e.g.: ,albumid,lloc,sloc,type,height,width,,height,width
+            * rtType：返回值 默认为Richval字符串 e.g.: ,albumid,lloc,sloc,type,height,width,,height,width
+                    也可以传入‘url’，用于评论
         */
         switch ($Type) {
             case 'file':
@@ -106,7 +106,7 @@ class qzone {
             'albumtype' => 7,
             'exttype' => 0,
             'refer' => 'shuoshuo',
-            'output_type' => 'json', //原来是jsonhtml
+            'output_type' => 'jsonhtml', //这边改成json行不通...
             'charset' => 'utf-8',
             'output_charset' => 'utf-8',
             'upload_hd' => 1,
@@ -122,16 +122,26 @@ class qzone {
         $Path = '/upload/cgi_upload_image';
         $result = $this -> post($Path, $data, 'upload');
         if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result); // 返回HTTP状态码
-        //$result = $this -> cut("frameElement.callback","</script>",$result);
-        //$arr = json_decode($this -> cut("(",")",$result),1);
-        $arr = json_decode($result,1);
-        $albumid = $arr['data']['albumid'];
-        $lloc = $arr['data']['lloc'];
-        $sloc = $lloc; //这俩似乎是一个东西
-        $type = $arr['data']['type'];
-        $height = $arr['data']['height'];
-        $width = $arr['data']['width'];
-        return ",$albumid,$lloc,$sloc,$type,$height,$width,,$height,$width";
+        $result = $this -> cut("frameElement.callback","</script>",$result);
+        $arr = json_decode($this -> cut("(",")",$result),1);
+        switch($rtType) {
+            case 'url':
+                $url = $arr['data']['url'];
+                return $url;
+                break;
+            case 'Richval':
+                $albumid = $arr['data']['albumid'];
+                $lloc = $arr['data']['lloc'];
+                $sloc = $lloc; //这俩似乎是一个东西
+                $type = $arr['data']['type'];
+                $height = $arr['data']['height'];
+                $width = $arr['data']['width'];
+                return ",$albumid,$lloc,$sloc,$type,$height,$width,,$height,$width";
+                break;
+            dafault:
+                return 'Invalid rtType';
+                break;
+        }
     }
 
     public function delete ($Tid) {
@@ -161,7 +171,7 @@ class qzone {
             * 评论说说（无论是自己的还是别人发的都可以用这个评论，传入Tid即可）
             * Tid: publish时返回的tid
             * Content: 评论内容
-            * RichType和Richval同publish传入的
+            * RichType和Richval不同于publish传入的，这里RichType=1时，Richval需要传入图片直链（通过upload的第三个参可以拿到）
             * 返回：array code:0/1 
         */
         $uin = $this -> HostUin;
