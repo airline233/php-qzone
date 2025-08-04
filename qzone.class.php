@@ -14,16 +14,16 @@ class qzone {
     public function __construct ($apiaddr, $actk=null) {
         /*
             * 自动获取QQ空间Cookies
-            * 返回值: 0/1
+            * 错误时自动PRINT HTTP状态码
             * apiaddr: NapCatApi地址 如http://172.16.0.1:5000
             * actk: NapCatApi的token
         */
-        $rt = $this -> curl($apiaddr."/getcookies?access_token=$actk",'domain=qzone.qq.com');
-        if(is_numeric($rt)) return 0;
+        $rt = $this -> curl($apiaddr."/get_cookies?access_token=$actk",'domain=qzone.qq.com');
+        if(is_numeric($rt)) print $rt;
         $rt = json_decode($rt, true);
-        if($rt['status'] != 'ok') return 0;
+        if($rt['status'] != 'ok') print $rt;
         $this -> Cookies = $rt['data']['cookies'];
-        $this -> skey = $this -> cut('skey=',';',$this -> Cookies);
+        $skey = $this -> cut('skey=',';',$this -> Cookies);
         $this -> pskey = $this -> cut('p_skey=',';',$this -> Cookies);
         $this -> token = $rt['data']['bkn'];
         $this -> HostUin = json_decode($this -> curl($apiaddr."/get_login_info?access_token=$actk"),1)['data']['user_id'];
@@ -38,7 +38,7 @@ class qzone {
                     1: 带图说说
                     视频说说暂不支持
             Richval: 带图说说时的图片信息
-                    e.g.:,lloc,sloc,type,height,width,,height,width
+                    e.g.:,albumid,lloc,sloc,type,height,width,,height,width
                     调用Upload函数会给出Richval
             注意：RichType和Richval必须同时存在或同时不存在
         */
@@ -53,7 +53,7 @@ class qzone {
                     url：表示File为图片URL
                     file：表示File为图片文件路径
             * 返回值: Richval字符串
-            e.g.: ,lloc,sloc,type,height,width,,height,width
+            e.g.: ,albumid,lloc,sloc,type,height,width,,height,width
         */
         switch ($Type) {
             case 'file':
@@ -79,7 +79,7 @@ class qzone {
             //'zzpanelkey' => null,
             'p_uin' => $this -> HostUin,
             'p_skey' => $this -> pskey,
-            //qzonetoken=
+            //qzonetoken => null,
             'uploadtype' => 1,
             'albumtype' => 7,
             'exttype' => 0,
@@ -97,10 +97,16 @@ class qzone {
             'picfile' => $image,
             'qzreferrer' => 'https%3A%2F%2Fuser.qzone.qq.com%2F'.$this -> HostUin.'%2Fmain'
         );
-        $Path = '/cgi_upload_image';
-        $result = $this -> post($Path, $data);
+        $Path = '/upload/cgi_upload_image';
+        $result = $this -> post($Path, $data, 'upload');
         if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result); // 返回HTTP状态码
-        return $result; //初期先直接返回结果
+        $albumid = rtrim($this -> cut('"albumid": "','totalpic',$result),'" ');
+        $lloc =  rtrim($this -> cut('"lloc": "','sloc',$result),'" ');
+        $sloc = $lloc; // lloc貌似和sloc是一样的
+        $type = rtrim($this -> cut('"type": "','width',$result),'"');
+        $width = rtrim($this -> cut('"width": "','height',$result),'"');
+        $width = rtrim($this -> cut('"height": "','albumid',$result),'"');
+        return ",$albumid,$lloc,$sloc,$type,$height,$width,,$height,$width";
     }
 
     private function post ($Path, $Params, $Type = 'user') { 
@@ -109,11 +115,12 @@ class qzone {
             * Path: /cgi-bin之后的内容 以/开头
             * Type: 默认为user:发布说说、删除说说、发表评论
                     upload：上传图片
-            * pPrams array形式
+            * Params array形式
         */
-        if ($Type == 'user') $url = 'https://user.qzone.qq.com/proxy/domain/taotao.qzone.qq.com/'.$Path.'?g_tk='.$this -> token;
-        elseif ($Type == 'upload') $url = 'https://up.qzone.qq.com/cgi-bin/upload'.$Path.'?g_tk='.$this -> token;
+        if ($Type == 'user') $url = 'https://user.qzone.qq.com/proxy/domain/taotao.qzone.qq.com/cgi-bin'.$Path.'?g_tk='.$this -> token;
+        elseif ($Type == 'upload') $url = 'https://up.qzone.qq.com/cgi-bin'.$Path.'?g_tk='.$this -> token;
         else return array('code' => 0,'msg' => 'Invalid Type');
+        $postdata = '';
         foreach ($Params as $key => $value) $postdata .= "$key=".urlencode($value)."&";
         $postdata = rtrim($postdata, '&');
         $result = $this -> curl($url, $postdata);
@@ -128,23 +135,23 @@ class qzone {
             * 返回值: 请求结果内容或HTTP状态码
         */
         $ch = curl_init();
-        $cu['CURLOPT_URL'] = $url;
-        $cu['CURLOPT_HEADER'] = false;
-        $cu['CURLOPT_RETURNTRANSFER'] = true;
-        $cu['CURLOPT_FOLLOWLOCATION'] = true;
+        $cu[CURLOPT_URL] = $url;
+        $cu[CURLOPT_HEADER] = false;
+        $cu[CURLOPT_RETURNTRANSFER] = true;
+        $cu[CURLOPT_FOLLOWLOCATION] = true;
         if($data):
-          $cu['CURLOPT_POST'] = true;
-          $cu['CURLOPT_POSTFIELDS'] = $data;
+          $cu[CURLOPT_POST] = true;
+          $cu[CURLOPT_POSTFIELDS] = $data;
         endif;
-        $cu['CURLOPT_HTTPHEADER'] = array("Cookie: ".$this -> Cookies);
-        $cu['CURLOPT_SSL_VERIFYPEER'] = false;
-        $cu['CURLOPT_SSL_VERIFYHOST'] = false;
-        $cu['CURLOPT_USERAGENT'] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0";
-        $cu['CURLOPT_TIMEOUT'] = "10";
+        $cu[CURLOPT_HTTPHEADER] = array("Cookie: ".$this -> Cookies);
+        $cu[CURLOPT_SSL_VERIFYPEER] = false;
+        $cu[CURLOPT_SSL_VERIFYHOST] = false;
+        $cu[CURLOPT_USERAGENT] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0";
+        $cu[CURLOPT_TIMEOUT] = "10";
         curl_setopt_array($ch, $cu);
         $content = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, 'CURLINFO_HTTP_CODE');
-        if ($httpCode >= 400) {
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if ($httpCode != 200) {
           return $httpCode;
         }
         curl_close($ch);
