@@ -56,12 +56,14 @@ class qzone {
             'ugc_right' => 1, //权限 1为所有人可见 4为好友可见 64为仅自己可见
             'to_sign' => 0,
             'hostuin' => $this -> HostUin, 
-            'code_version' => '1&format=fs', //同上
+            'code_version' => 1,
+            'format' => 'json', //居然可以让它直接返回json！
             'qzreferrer' => "https%3A%2F%2Fuser.qzone.qq.com%2F{$this -> HostUin}%2Fmain"
         );
         $result = $this -> post('/emotion_cgi_publish_v6', $data);
-        $result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
-        $arr = json_decode($this -> cut("(",");",$result),1);
+        /*$result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
+        $arr = json_decode($this -> cut("(",");",$result),1);*/
+        $arr = json_decode($result,1);
         return $arr['t1_tid'];
     }
 
@@ -104,7 +106,7 @@ class qzone {
             'albumtype' => 7,
             'exttype' => 0,
             'refer' => 'shuoshuo',
-            'output_type' => 'jsonhtml',
+            'output_type' => 'json', //原来是jsonhtml
             'charset' => 'utf-8',
             'output_charset' => 'utf-8',
             'upload_hd' => 1,
@@ -120,8 +122,9 @@ class qzone {
         $Path = '/upload/cgi_upload_image';
         $result = $this -> post($Path, $data, 'upload');
         if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result); // 返回HTTP状态码
-        $result = $this -> cut("frameElement.callback","</script>",$result);
-        $arr = json_decode($this -> cut("(",")",$result),1);
+        //$result = $this -> cut("frameElement.callback","</script>",$result);
+        //$arr = json_decode($this -> cut("(",")",$result),1);
+        $arr = json_decode($result,1);
         $albumid = $arr['data']['albumid'];
         $lloc = $arr['data']['lloc'];
         $sloc = $lloc; //这俩似乎是一个东西
@@ -140,20 +143,22 @@ class qzone {
         $postdata = array(
             'hostuin' => $this -> HostUin,
             'tid' => $Tid,
-            't1_source' => '1&code_version=1&format=fs', //应该是不变的，先放一起了
+            't1_source' => '1&code_version=1',
+            'format' => 'json',
             'qzreferrer=https%3A%2F%2Fuser.qzone.qq.com%2F'. $this -> HostUin
         );
         $result = $this -> post('/emotion_cgi_delete_v6',$postdata);
         if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result); // 请求失败的话返回HTTP状态码
-        $result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
-        $arr = json_decode($this -> cut("(",");",$result),1);
+        /*$result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
+        $arr = json_decode($this -> cut("(",");",$result),1);*/ 
+        $arr = json_decode($result,1);
         if($arr['subcode'] == 0) return array('code' => 1); //成功时 subcode返回的是0，失败-200
         return array('code' => 0);
     }
 
     public function comment ($Tid, $Content, $RichType = null, $Richval = null) {
         /*
-            * 评论说说（应该是只能自己的 给别人评论是另外一个api）
+            * 评论说说（无论是自己的还是别人发的都可以用这个评论，传入Tid即可）
             * Tid: publish时返回的tid
             * Content: 评论内容
             * RichType和Richval同publish传入的
@@ -161,23 +166,30 @@ class qzone {
         */
         $uin = $this -> HostUin;
         $postdata = array(
-            'uin' => $uin,
-            'hostUin' => $uin,
-            'topicId' => "$uin_$Tid",
-            'commentUin' => $uin,
-            'content' => $Content,
-            'richval' => $Richval,
-            'richtype' => $RichType,
-            //'inCharset=&outCharset=&ref=&', 没有传入的
-            'private' => '=0&with_fwd=0&to_tweet=0', //不变 丢一起了
-            'hostuin' => $uin,
-            'code_version' => '1&format=fs', //丢一起了
-            'qzreferrer' => null //试试不传这个行不行...实在太长了
+            "qzreferrer" => "https%3A%2F%2Fuser.qzone.qq.com%2F".$uin,
+            "topicId" => "{$uin}_{$Tid}__1",
+            "feedsType" => "100",
+            "inCharset" => "utf-8",
+            "outCharset" => "utf-8",
+            "plat" => "qzone",
+            "source" => "ic",
+            "hostUin" => $uin,
+            "isSignIn" => "",
+            "platformid" => "50",
+            "uin" => $uin,
+            "format" => "json",
+            "ref" => "feeds",
+            "content" => $Content,
+            "richval" => $Richval,
+            "richtype" => $RichType,
+            "private" => "0",
+            "paramstr" => "1"
         );
-        $result = $this -> post('/emotion_cgi_addcomment_ugc',$postdata);
+        $result = $this -> post('/emotion_cgi_re_feeds',$postdata);
         if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result); // 请求失败的话返回HTTP状态码
-        $result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
-        $arr = json_decode($this -> cut("(",");",$result),1);
+        /*$result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
+        $arr = json_decode($this -> cut("(",");",$result),1); 历史遗留 */
+        $arr = json_decode($result,1);
         if($arr['subcode'] == 0) return array('code' => 1); //成功时 subcode返回的是0，失败-800（也有可能是其他的）
         return array('code' => 0,'msg' => $arr['message'],'subcode' => $arr['subcode']);
     }
