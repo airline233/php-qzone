@@ -42,7 +42,26 @@ class qzone {
                     调用Upload函数会给出Richval
             注意：RichType和Richval必须同时存在或同时不存在
         */
-        
+        $data = array(
+            'syn_tweet_verson' => 1,
+            'paramstr' => 1,
+            'pic_template' => null,
+            'richtype' => $RichType,
+            'richval' => $Richval,
+            'special_url' => null,
+            'subrichtype' => null,
+            'con' => $Content,
+            'feedversion' => '1&ver=1', //这俩应该都不动 写一起了 实际上是两个参数
+            ugc_right=1, //权限 1为所有人可见 64为仅自己可见
+            to_sign=0
+            'hostuin' => $this -> HostUin, 
+            'code_version' => '1&format=fs', //同上
+            'qzreferrer' => "https%3A%2F%2Fuser.qzone.qq.com%2F{$this -> HostUin}%2Fmain"
+        );
+        $result = $this -> post('/emotion_cgi_publish_v6', $data);
+        $result = $this -> cut("frameElement.callback","</script>",$result);
+        $arr = json_decode($this -> cut("(",")",$result),1);
+        return $arr['t1_tid'];
     }
 
     public function upload ($File, $Type = 'base64') {
@@ -100,12 +119,14 @@ class qzone {
         $Path = '/upload/cgi_upload_image';
         $result = $this -> post($Path, $data, 'upload');
         if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result); // 返回HTTP状态码
-        $albumid = rtrim($this -> cut('"albumid": "','totalpic',$result),'" ');
-        $lloc =  rtrim($this -> cut('"lloc": "','sloc',$result),'" ');
-        $sloc = $lloc; // lloc貌似和sloc是一样的
-        $type = rtrim($this -> cut('"type": "','width',$result),'"');
-        $width = rtrim($this -> cut('"width": "','height',$result),'"');
-        $width = rtrim($this -> cut('"height": "','albumid',$result),'"');
+        $result = $this -> cut("frameElement.callback","</script>",$result);
+        $arr = json_decode($this -> cut("(",")",$result),1);
+        $albumid = $arr['data']['albumid'];
+        $lloc = $arr['data']['lloc'];
+        $sloc = $lloc; //这俩似乎是一个东西
+        $type = $arr['data']['type'];
+        $height = $arr['data']['height'];
+        $width = $arr['data']['width'];
         return ",$albumid,$lloc,$sloc,$type,$height,$width,,$height,$width";
     }
 
