@@ -41,6 +41,7 @@ class qzone {
                     e.g.:,albumid,lloc,sloc,type,height,width,,height,width
                     调用Upload函数会给出Richval
             注意：RichType和Richval必须同时存在或同时不存在
+            返回：说说Tid，修改/删除/评论用
         */
         $data = array(
             'syn_tweet_verson' => 1,
@@ -52,15 +53,15 @@ class qzone {
             'subrichtype' => null,
             'con' => $Content,
             'feedversion' => '1&ver=1', //这俩应该都不动 写一起了 实际上是两个参数
-            ugc_right=1, //权限 1为所有人可见 64为仅自己可见
-            to_sign=0
+            'ugc_right' => 1, //权限 1为所有人可见 64为仅自己可见
+            'to_sign' => 0,
             'hostuin' => $this -> HostUin, 
             'code_version' => '1&format=fs', //同上
             'qzreferrer' => "https%3A%2F%2Fuser.qzone.qq.com%2F{$this -> HostUin}%2Fmain"
         );
         $result = $this -> post('/emotion_cgi_publish_v6', $data);
-        $result = $this -> cut("frameElement.callback","</script>",$result);
-        $arr = json_decode($this -> cut("(",")",$result),1);
+        $result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
+        $arr = json_decode($this -> cut("(",");",$result),1);
         return $arr['t1_tid'];
     }
 
