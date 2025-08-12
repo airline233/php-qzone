@@ -93,6 +93,9 @@ class qzone {
                 return array('code' => 0,'msg' => 'Invalid Type');
         }
 
+        if(strlen(base64_decode($image)) > 1024 * 1024 * 3)  //>3MB
+            $image = $this -> compressImage(base64_decode($image));
+
         $data = array(
             'filename' => 'filename',
             'uin' => $this -> HostUin,
@@ -257,6 +260,14 @@ class qzone {
         $b = mb_strpos($str,$begin) + mb_strlen($begin);
         $e = mb_strpos($str,$end) - $b;
         return mb_substr($str,$b,$e);
+    }
+
+    private function compressImage($sourceimg, $quality = 56) {
+        if (!function_exists('gd_info')) return 'error!! GD required';
+        $image = imagecreatefromstring($sourceimg);
+        ob_start();
+        imagewebp($image, null, $quality);
+        return ob_get_clean();
     }
 }
 ?>
