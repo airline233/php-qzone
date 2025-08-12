@@ -41,7 +41,7 @@ class qzone {
                     e.g.:,albumid,lloc,sloc,type,height,width,,height,width
                     调用Upload函数会给出Richval
             注意：RichType和Richval必须同时存在或同时不存在
-            返回：说说Tid，修改/删除/评论用
+            返回：说说Tid，修改/删除/评论用；失败则返回原始array
         */
         $data = array(
             'syn_tweet_verson' => 1,
@@ -64,6 +64,7 @@ class qzone {
         /*$result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
         $arr = json_decode($this -> cut("(",");",$result),1);*/
         $arr = json_decode($result,1);
+        if($arr['subcode'] != 0) return $arr;
         return $arr['t1_tid'];
     }
 
