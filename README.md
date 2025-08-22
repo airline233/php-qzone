@@ -1,5 +1,6 @@
 # php-qzone
 PHP版本QQ空间的相关操作类
+
 看demo.php，懒得写文档了
 
 这是一个用于操作QQ空间的PHP类库，支持说说的发布、删除、评论，以及图片和视频的上传。
@@ -44,7 +45,8 @@ print_r($instance->delete($tid));
 
 ## 主要API说明
 
-** 请注意 传入参数格式以qzone.class.php中的注释为准，这个readme是ai写的 不完善 **
+**请注意 传入参数格式以qzone.class.php中的注释为准，这个readme是ai写的 不完善**
+
 - `publish($Content, $RichType = null, $Richval = null, $setTime = null, $ugcRight = 1, $allowUins = null)`  
   发布说说。
 
