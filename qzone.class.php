@@ -23,14 +23,19 @@ class qzone {
         $rt = json_decode($rt, true);
         if($rt['status'] != 'ok') print $rt;
         $this -> Cookies = $rt['data']['cookies'];
-        $skey = $this -> cut('skey=',';',$this -> Cookies);
-        $this -> pskey = $this -> cut('p_skey=',';',$this -> Cookies);
+        $ckarr = explode(';',$this -> Cookies);
+        foreach($ckarr as $single) {
+            $single_arr = explode('=',str_replace(" ","",$single));
+            $ckarr[$single_arr[0]] = $single_arr[1];
+        }
+        $this -> skey = $ckarr['skey'];
+        $this -> pskey = $ckarr['p_skey'];
         $this -> token = $rt['data']['bkn'];
         $this -> HostUin = json_decode($this -> curl($apiaddr."/get_login_info?access_token=$actk"),1)['data']['user_id'];
         return 1;
     }
 
-    public function publish ($Content, $RichType = null, $Richval = null) {
+    public function publish ($Content, $RichType = null, $Richval = null, $setTime = null, $ugcRight = 1, $allowUins = null) {
         /*
             Content: 发布的文本内容
             RichType: 
@@ -41,6 +46,14 @@ class qzone {
                     e.g.:,albumid,lloc,sloc,type,height,width,,height,width
                     调用Upload函数会给出Richval
             注意：RichType和Richval必须同时存在或同时不存在
+            setTime: 定时发布时传入 10位unix时间戳格式 精确到秒
+            ugcRight: 说说查看权限
+                    1为所有人可见 4为好友可见
+                    16为部分好友可见（通过allow_uins传入qq号）
+                    64为仅自己可见
+                    128为部分好友不可见 qq号传入规则同16
+            allowUins: 权限限制时传入 多个qq用|分隔
+                    e.g. 10000 或 10001|10002|...|10005
             返回：说说Tid，修改/删除/评论用；失败则返回原始array
         */
         $data = array(
@@ -53,8 +66,11 @@ class qzone {
             'subrichtype' => null,
             'con' => $Content,
             'feedversion' => '1&ver=1', //这俩应该都不动 写一起了 实际上是两个参数
-            'ugc_right' => 1, //权限 1为所有人可见 4为好友可见 64为仅自己可见
-            'to_sign' => 0,
+            'ugc_right' => $ugcRight, //权限 1为所有人可见 4为好友可见 64为仅自己可见
+            'allow_uins' => $allowUins,
+            'who' => (empty($allowUins)) ? null : 1,
+            'to_sign' => 0, //同步至个签
+            'time' => $setTime,
             'hostuin' => $this -> HostUin, 
             'code_version' => 1,
             'format' => 'json', //居然可以让它直接返回json！
@@ -148,6 +164,36 @@ class qzone {
         }
     }
 
+    public function upvideo ($File) {
+        /*
+            * 上传视频
+            * File： 视频路径
+            * 还未实现
+        */
+        require_once('getid3/getid3.php');
+        $binary = file_get_contents($File);
+        $len = strlen($binary);
+        $num = ceil($len / 16384);
+        $sha1 = sha1($binary);
+        $getid3 = new getID3();
+        $videotime = round($getid3 -> analyze($File)['playtime_seconds'] * 1000,2); //精确到0.01毫秒
+        $time = time();
+        $Params = "{\"control_req\":[{\"uin\":\"{$this -> HostUin}\",\"token\":{\"type\":4,\"data\":\"{$this -> pskey}\",\"appid\":5},\"appid\":\"video_qzone\",\"checksum\":\"{$sha1}\",\"check_type\":1,\"file_len\":{$len},\"env\":{\"refer\":\"qzone\",\"deviceInfo\":\"h5\"},\"model\":0,\"biz_req\":{\"sPicTitle\":\"upload.mp4\",\"sPicDesc\":\"\",\"sAlbumName\":\"\",\"sAlbumID\":\"\",\"iAlbumTypeID\":0,\"iBitmap\":0,\"iUploadType\":3,\"iUpPicType\":0,\"iBatchID\":0,\"sPicPath\":\"\",\"iPicWidth\":0,\"iPicHight\":0,\"iWaterType\":0,\"iDistinctUse\":0,\"sTitle\":\"upload\",\"sDesc\":\"\",\"iFlag\":0,\"iUploadTime\":{$time},\"iPlayTime\":{$videotime},\"sCoverUrl\":\"\",\"iIsNew\":111,\"iIsOriginalVideo\":0,\"iIsFormatF20\":0,\"extend_info\":{\"video_type\":\"3\",\"domainid\":\"5\"}},\"session\":\"\",\"asy_upload\":0,\"cmd\":\"FileUploadVideo\"}]}";
+        $rt_arr = json_decode($this -> curl("https://h5.qzone.qq.com/webapp/json/sliceUpload/FileBatchControl/{$sha1}?g_tk={$this -> token}",$Params),1);
+        $session = $rt_arr['data']['session'];
+
+        $rt_arr = [];
+        for($i=0;$i<$num;$i++) {
+            $offset = $i * 16384;
+            if($i+1 < $num) $end= $i * 16384;
+            else $end = $len;
+            $url = "https://h5.qzone.qq.com/webapp/json/sliceUpload/FileUploadVideo?seq={$i}&retry=0&offset={$offset}&end={$end}&total=583937&type=json&g_tk={$this -> token}";
+            $base64 = base64_encode(substr($binary,$offset,16384));
+            $Params = "{\"uin\":\"{$this -> HostUin}\",\"appid\":\"video_qzone\",\"session\":\"{$session}\",\"offset\":{$offset},\"data\":\"{$base64}\",\"checksum\":\"\",\"check_type\":1,\"retry\":0,\"seq\":0,\"end\":16384,\"cmd\":\"FileUploadVideo\",\"slice_size\":16384,\"biz_req\":{}}";
+            $rt_arr[] = json_decode($this -> curl($url,$Params),1);
+        }
+    }
+
     public function delete ($Tid) {
         /*
             * 删除说说
@@ -210,7 +256,7 @@ class qzone {
 
     private function post ($Path, $Params, $Type = 'user') { 
         /*
-            * 本文件中所有QQ空间相关操作均为POST方式
+            * 本文件中大部分QQ空间相关操作均为POST方式
             * Path: /cgi-bin之后的内容 以/开头
             * Type: 默认为user:发布说说、删除说说、发表评论
                     upload：上传图片
@@ -219,8 +265,8 @@ class qzone {
         if ($Type == 'user') $url = 'https://user.qzone.qq.com/proxy/domain/taotao.qzone.qq.com/cgi-bin'.$Path.'?g_tk='.$this -> token;
         elseif ($Type == 'upload') $url = 'https://up.qzone.qq.com/cgi-bin'.$Path.'?g_tk='.$this -> token;
         else return array('code' => 0,'msg' => 'Invalid Type');
-        $postdata = '';
-        foreach ($Params as $key => $value) $postdata .= "$key=".urlencode($value)."&";
+        $postdata = $Params;
+        if(is_array($Params)) foreach ($Params as $key => $value) $postdata .= "$key=".urlencode($value)."&";
         $postdata = rtrim($postdata, '&');
         $result = $this -> curl($url, $postdata);
         return $result;
@@ -243,6 +289,7 @@ class qzone {
           $cu[CURLOPT_POSTFIELDS] = $data;
         endif;
         $cu[CURLOPT_HTTPHEADER] = array("Cookie: ".$this -> Cookies);
+        if($this -> isJson($data)) $cu[CURLOPT_HTTPHEADER][] = "Content-Type: application/json";
         $cu[CURLOPT_SSL_VERIFYPEER] = false;
         $cu[CURLOPT_SSL_VERIFYHOST] = false;
         $cu[CURLOPT_USERAGENT] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0";
@@ -269,6 +316,16 @@ class qzone {
         ob_start();
         imagewebp($image, null, $quality);
         return ob_get_clean();
+    }
+
+    private function isJson($string = '', $assoc = true){
+        if(is_string($string)){
+            $data = json_decode($string, $assoc);
+            if(($data && is_object($data)) || (is_array($data) && !empty($data))){
+                return true;
+            }
+        }
+        return false;
     }
 }
 ?>
