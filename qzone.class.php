@@ -76,9 +76,8 @@ class qzone {
             'format' => 'json', //居然可以让它直接返回json！
             'qzreferrer' => "https%3A%2F%2Fuser.qzone.qq.com%2F{$this -> HostUin}%2Fmain"
         );
-        $result = $this -> post('/emotion_cgi_publish_'.(isset($setTime)) ? 'timershuoshuo_' : ''.'v6', $data);
-        /*$result = '(' . $this -> cut("frameElement.callback(","</script>",$result);
-        $arr = json_decode($this -> cut("(",");",$result),1);*/
+        $ist = (isset($setTime)) ? 'timershuoshuo_' : '';
+        $result = $this -> post('/emotion_cgi_publish_'.$ist.'v6', $data);
         $arr = json_decode($result,1);
         if($arr['subcode'] != 0) return $arr;
         return $arr['t1_tid'];
