@@ -10,5 +10,6 @@ $richval = $instance -> upload($imgfile,'base64','url');
 print_r($instance -> comment($tid,'测试带图评论1',1,$richval));
 print_r($instance -> comment($tid,'测试普通评论1'));
 print_r($instance -> comment($tid,'测试普通评论2'));
+print_r($instance -> upvideo('test.mp4','测试视频上传'));
 print_r($instance -> delete($tid));
 ?>

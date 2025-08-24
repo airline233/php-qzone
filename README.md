@@ -12,11 +12,12 @@ PHP版本QQ空间的相关操作类
 - 删除说说
 - 评论说说（支持带图评论）
 - 上传图片（支持本地文件、Base64、URL）
+- 上传并发布视频说说
 
 ## 快速开始
 
 1. 克隆本项目到本地
-2. 安装依赖（PHP7.4及以上 需要cURL、GD扩展 推荐使用php8.0）
+2. 安装依赖（PHP7.4及以上 需要cURL、GD扩展 解禁shell_exec 推荐使用php8.0、需要安装ffmpeg）
 3. 参考 [demo.php](demo.php) 示例：
 
 ```php
@@ -61,6 +62,9 @@ print_r($instance->delete($tid));
 
 - `comment($Tid, $Content, $RichType = null, $Richval = null)`  
   评论说说 支持带图。
+
+- `upvideo($File, $desc)`
+  上传并发布视频说说
 
 ## 注意事项
 
