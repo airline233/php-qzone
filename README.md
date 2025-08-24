@@ -72,4 +72,4 @@ print_r($instance->delete($tid));
 
 ## License
 
-MIT License
+Apache 2.0 License
