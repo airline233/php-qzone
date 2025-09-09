@@ -316,8 +316,9 @@ json;
         else return array('code' => 0,'msg' => 'Invalid Type');
         $postdata = $Params;
         if(is_array($Params)) 
-            http_build_query($Params); //更优雅地处理post数据
-            //foreach ($Params as $key => $value) $postdata .= "$key=".urlencode($value)."&";
+            //http_build_query($Params); //更优雅地处理post数据
+            //Update on 2025-09-09 这玩意会把&转义，但是我上面很多不变参都是写一起的，导致delete失效
+            foreach ($Params as $key => $value) $postdata .= "$key=".urlencode($value)."&";
         $postdata = rtrim($postdata, '&');
         $result = $this -> curl($url, $postdata);
         return $result;
