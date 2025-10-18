@@ -110,7 +110,7 @@ class qzone {
         }
 
         if(strlen(base64_decode($image)) > 1024 * 1024 * 1)  //>1MB
-            $image = $this -> compressImageBase64(base64_decode($image));
+            $image = $this -> compressImageBase64($image);
 
         $data = array(
             'filename' => 'filename',
