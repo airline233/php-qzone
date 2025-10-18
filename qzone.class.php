@@ -109,8 +109,8 @@ class qzone {
                 return array('code' => 0,'msg' => 'Invalid Type');
         }
 
-        if(strlen(base64_decode($image)) > 1024 * 1024 * 3)  //>3MB
-            $image = $this -> compressImage(base64_decode($image));
+        if(strlen(base64_decode($image)) > 1024 * 1024 * 1)  //>1MB
+            $image = $this -> compressImageBase64(base64_decode($image));
 
         $data = array(
             'filename' => 'filename',
@@ -155,7 +155,7 @@ class qzone {
                 $height = $arr['data']['height'];
                 $width = $arr['data']['width'];
                 return ",$albumid,$lloc,$sloc,$type,$height,$width,,$height,$width";
-            dafault:
+            default:
                 return 'Invalid rtType';
         }
     }
@@ -305,12 +305,56 @@ class qzone {
         return mb_substr($str,$b,$e);
     }
 
-    private function compressImage($sourceimg, $quality = 56) {
-        if (!function_exists('gd_info')) return 'error!! GD required';
-        $image = imagecreatefromstring($sourceimg);
+    private function compressImageBase64($base64Input, $quality = 75) {
+        // 1. 清理 Base64 头部，获取纯图像数据
+        if (strpos($base64Input, ',') !== false) {
+            $base64Input = substr($base64Input, strpos($base64Input, ',') + 1);
+        }
+        // 修复在 URL 传输中可能丢失的 '+'
+        $base64Input = str_replace(' ', '+', $base64Input);
+        $imageData = base64_decode($base64Input);
+
+        if ($imageData === false) {
+            // Base64 解码失败
+            return null;
+        }
+
+        // 2. 从字符串创建图像资源 (GD 库会自动识别格式)
+        $sourceImage = @imagecreatefromstring($imageData);
+        if ($sourceImage === false) {
+            // 无效的图像数据
+            return null;
+        }
+
+        // 3. 获取原图尺寸
+        $width = imagesx($sourceImage);
+        $height = imagesy($sourceImage);
+
+        // 4. 创建一个新的真彩色画布 (用于输出 JPEG)
+        $outputImage = imagecreatetruecolor($width, $height);
+
+        // 5. [关键] 处理透明度：为 PNG/GIF 创建白色背景
+        // JPEG 不支持透明度，如果不填充背景，透明区域会变黑
+        $white = imagecolorallocate($outputImage, 255, 255, 255);
+        imagefill($outputImage, 0, 0, $white);
+
+        // 6. 将原图（无论 PNG, JPEG, GIF...）复制到我们的白色背景画布上
+        imagecopy($outputImage, $sourceImage, 0, 0, 0, 0, $width, $height);
+
+        // 7. 使用输出缓冲捕获 imagejpeg 的输出
         ob_start();
-        imagewebp($image, null, $quality);
-        return ob_get_clean();
+        imagejpeg($outputImage, null, $quality);
+        $compressedImageData = ob_get_contents();
+        ob_end_clean();
+
+        // 8. 释放内存
+        imagedestroy($sourceImage);
+        imagedestroy($outputImage);
+
+        // 9. 编码为 Base64 并返回
+        $base64Output = base64_encode($compressedImageData);
+    
+        return 'data:image/jpeg;base64,' . $base64Output;
     }
 
     private function isJson($string = '', $assoc = true){
