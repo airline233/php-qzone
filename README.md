@@ -60,6 +60,11 @@ print_r($instance->delete($tid));
 - `delete($Tid)`  
   删除说说。
 
+- `updateRight($Tid, $ugcRight, $allowUins = null, $uin = null)`  
+  修改已有说说的查看权限，只更新 `ugc_right` / `allow_uins`，其余内容遵照原始说说详情回填。
+  - `ugcRight`：`1` 所有人可见，`4` 好友可见，`16` 部分好友可见，`64` 仅自己可见，`128` 部分好友不可见
+  - `allowUins`：在 `16/128` 时必填，格式为 `10001|10002`
+
 - `comment($Tid, $Content, $RichType = null, $Richval = null)`  
   评论说说 支持带图。
 

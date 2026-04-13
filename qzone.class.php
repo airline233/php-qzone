@@ -9,7 +9,7 @@ class qzone {
     public $Cookies;
     private $skey;
     private $pskey;
-    private $token;
+    private $g_tk;
 
     public function __construct ($apiaddr, $actk=null) {
         /*
@@ -23,14 +23,25 @@ class qzone {
         $rt = json_decode($rt, true);
         if($rt['status'] != 'ok') print $rt;
         $this -> Cookies = $rt['data']['cookies'];
-        $ckarr = explode(';',$this -> Cookies);
-        foreach($ckarr as $single) {
-            $single_arr = explode('=',str_replace(" ","",$single));
-            $ckarr[$single_arr[0]] = $single_arr[1];
+        $ckarr = array();
+        foreach(explode(';', (string)$this -> Cookies) as $single) {
+            $single = trim($single);
+            if($single === '' || strpos($single, '=') === false) continue;
+            $single_arr = explode('=', $single, 2);
+            $key = trim($single_arr[0]);
+            if($key === '') continue;
+            $ckarr[$key] = $single_arr[1];
         }
-        $this -> skey = $ckarr['skey'];
-        $this -> pskey = $ckarr['p_skey'];
-        $this -> token = $rt['data']['bkn'];
+        $this -> skey = $ckarr['skey'] ?? '';
+        $this -> pskey = $ckarr['p_skey'] ?? '';
+        
+        $hash_val = 5381;
+        $pskey_len = strlen($this -> pskey);
+        for($i = 0; $i < $pskey_len; $i++) {
+            $hash_val = (int)fmod(($hash_val * 33) + ord($this -> pskey[$i]), 2147483648);
+        }
+        $this -> g_tk = (string)$hash_val;
+
         $this -> HostUin = json_decode($this -> curl($apiaddr."/get_login_info?access_token=$actk"),1)['data']['user_id'];
     }
 
@@ -132,7 +143,7 @@ class qzone {
             'hd_width' => 2048,
             'hd_height' => 10000,
             'hd_quality' => 96,
-            'backUrls' => 'http://upbak.photo.qzone.qq.com%2Fcgi-bin%2Fupload%2Fcgi_upload_image%2Chttp%3A%2F%2F119.147.64.75%2Fcgi-bin%2Fupload%2Fcgi_upload_image&url=https%3A%2F%2Fup.qzone.qq.com%2Fcgi-bin%2Fupload%2Fcgi_upload_image%3Fg_tk%3D'.$this -> token,
+            'backUrls' => 'http://upbak.photo.qzone.qq.com%2Fcgi-bin%2Fupload%2Fcgi_upload_image%2Chttp%3A%2F%2F119.147.64.75%2Fcgi-bin%2Fupload%2Fcgi_upload_image&url=https%3A%2F%2Fup.qzone.qq.com%2Fcgi-bin%2Fupload%2Fcgi_upload_image%3Fg_tk%3D&g_tk='.$this -> g_tk,
             'base64' => 1,
             'jsonhtml_callback' => 'callback',
             'picfile' => $image,
@@ -175,7 +186,7 @@ class qzone {
         $videotime = round($getid3 -> analyze($File)['playtime_seconds'] * 1000,2); //精确到0.01毫秒
         $time = time();
         $Params = "{\"control_req\":[{\"uin\":\"{$this -> HostUin}\",\"token\":{\"type\":4,\"data\":\"{$this -> pskey}\",\"appid\":5},\"appid\":\"video_qzone\",\"checksum\":\"{$sha1}\",\"check_type\":1,\"file_len\":{$len},\"env\":{\"refer\":\"qzone\",\"deviceInfo\":\"h5\"},\"model\":0,\"biz_req\":{\"sPicTitle\":\"upload.mp4\",\"sPicDesc\":\"\",\"sAlbumName\":\"\",\"sAlbumID\":\"\",\"iAlbumTypeID\":0,\"iBitmap\":0,\"iUploadType\":3,\"iUpPicType\":0,\"iBatchID\":0,\"sPicPath\":\"\",\"iPicWidth\":0,\"iPicHight\":0,\"iWaterType\":0,\"iDistinctUse\":0,\"sTitle\":\"upload\",\"sDesc\":\"\",\"iFlag\":0,\"iUploadTime\":{$time},\"iPlayTime\":{$videotime},\"sCoverUrl\":\"\",\"iIsNew\":111,\"iIsOriginalVideo\":0,\"iIsFormatF20\":0,\"extend_info\":{\"video_type\":\"3\",\"domainid\":\"5\"}},\"session\":\"\",\"asy_upload\":0,\"cmd\":\"FileUploadVideo\"}]}";
-        $rt_arr = json_decode($this -> curl("https://h5.qzone.qq.com/webapp/json/sliceUpload/FileBatchControl/{$sha1}?g_tk={$this -> token}",$Params),1);
+        $rt_arr = json_decode($this -> curl("https://h5.qzone.qq.com/webapp/json/sliceUpload/FileBatchControl/{$sha1}?g_tk={$this -> g_tk}",$Params),1);
         $session = $rt_arr['data']['session'];
 
         $rt_arr = [];
@@ -183,7 +194,7 @@ class qzone {
             $offset = $i * 16384;
             if($i+1 < $num) $end= $i * 16384;
             else $end = $len;
-            $url = "https://h5.qzone.qq.com/webapp/json/sliceUpload/FileUploadVideo?seq={$i}&retry=0&offset={$offset}&end={$end}&total=583937&type=json&g_tk={$this -> token}";
+            $url = "https://h5.qzone.qq.com/webapp/json/sliceUpload/FileUploadVideo?seq={$i}&retry=0&offset={$offset}&end={$end}&total=583937&type=json&g_tk={$this -> g_tk}";
             $base64 = base64_encode(substr($binary,$offset,16384));
             $Params = "{\"uin\":\"{$this -> HostUin}\",\"appid\":\"video_qzone\",\"session\":\"{$session}\",\"offset\":{$offset},\"data\":\"{$base64}\",\"checksum\":\"\",\"check_type\":1,\"retry\":0,\"seq\":0,\"end\":16384,\"cmd\":\"FileUploadVideo\",\"slice_size\":16384,\"biz_req\":{}}";
             $rt_arr[] = json_decode($this -> curl($url,$Params),1);
@@ -217,7 +228,7 @@ class qzone {
             * Tid: publish时返回的tid
             * Content: 评论内容
             * RichType和Richval不同于publish传入的，这里RichType=1时，Richval需要传入图片直链（通过upload的第三个参可以拿到）
-            * 返回：array code:0/1 
+            * 返回：array code:0/1
         */
         $uin = $this -> HostUin;
         $postdata = array(
@@ -247,16 +258,104 @@ class qzone {
         return array('code' => 0,'msg' => $arr['message'],'subcode' => $arr['subcode']);
     }
 
-    private function post ($Path, $Params, $Type = 'user') { 
+    public function updateRight ($Tid, $ugcRight, $allowUins = null) {
+        /*
+            * 修改已有说说的查看权限
+            * Tid: 说说Tid
+            * ugcRight: 目标权限
+                    1为所有人可见 4为好友可见
+                    16为部分好友可见（通过allow_uins传入qq号）
+                    64为仅自己可见
+                    128为部分好友不可见 qq号传入规则同16
+            * allowUins: 权限限制时传入 多个qq用|分隔
+            * uin: 目标空间QQ号，默认当前登录QQ
+            返回：array code:0/1
+        */
+        if(!in_array($ugcRight, array(1, 4, 16, 64, 128), true))
+            return array('code' => 0, 'msg' => 'Invalid ugcRight');
+
+        $allowUins = trim((string)$allowUins);
+        if($allowUins !== '') {
+            $allowUinMap = array();
+            foreach(explode('|', $allowUins) as $singleUin) {
+                $singleUin = trim($singleUin);
+                if($singleUin === '') continue;
+                if(!preg_match('/^\d+$/', $singleUin))
+                    return array('code' => 0, 'msg' => 'Invalid allowUins');
+                $allowUinMap[$singleUin] = true;
+            }
+            $allowUins = implode('|', array_keys($allowUinMap));
+        }
+
+        if(in_array($ugcRight, array(16, 128), true) && empty($allowUins))
+            return array('code' => 0, 'msg' => 'allowUins required when ugcRight is 16 or 128');
+        if(!in_array($ugcRight, array(16, 128), true)) $allowUins = '';
+
+        $detail = $this -> getEmotionDetail($Tid);
+        if(isset($detail['stage'])) return $detail;
+        $postdata = $this -> buildUpdatePayloadFromDetail($detail);
+        if(isset($postdata['code']) && $postdata['code'] === 0) return $postdata;
+        $postdata['ugc_right'] = $ugcRight;
+        if(in_array($ugcRight, array(16, 128), true)) $postdata['allow_uins'] = $allowUins;
+        $result = $this -> post('/emotion_cgi_update', $postdata);
+        if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result, 'stage' => 'emotion_cgi_update', 'httpCode' => (int)$result);
+
+        $jsonBody = trim((string)$result);
+        if(strpos($jsonBody, '_Callback(') !== false) {
+            $jsonBody = $this -> cut("_Callback(", ");", $jsonBody);
+        } elseif(strpos($jsonBody, 'frameElement.callback(') !== false) {
+            $jsonBody = $this -> cut("frameElement.callback(", ");", $jsonBody);
+        } elseif(strpos($jsonBody, 'Callback(') !== false) {
+            $jsonBody = $this -> cut("Callback(", ");", $jsonBody);
+        } elseif(strpos($jsonBody, 'frameElement.callback') !== false && strpos($jsonBody, '</script>') !== false) {
+            $jsonBody = trim($this -> cut("frameElement.callback", "</script>", $jsonBody));
+            if(strpos($jsonBody, '(') !== false && strpos($jsonBody, ')') !== false) {
+                $jsonBody = $this -> cut("(", ")", $jsonBody);
+            }
+        }
+        $arr = json_decode($jsonBody, 1);
+        if(!is_array($arr)) return array('code' => 0, 'msg' => 'Invalid response', 'stage' => 'emotion_cgi_update');
+        if(($arr['subcode'] ?? -1) == 0) return array('code' => 1, 'ugc_right' => $arr['ugc_right'] ?? $ugcRight);
+        return array('code' => 0, 'msg' => $arr['message'] ?? $arr['msg'] ?? $result, 'subcode' => $arr['subcode'] ?? null);
+    }
+
+    public function setQzoneRight ($targetUin, $action) {
+        /*
+            * 设置QQ空间权限
+            * targetUin: 目标QQ号
+            * action: 目标状态
+                    1为拉黑
+                    2为解除
+            返回：array code:0/1
+        */
+        $uin = $this -> HostUin;
+        $postdata = array(
+            'uin' => $uin,
+            'act_uin' => $targetUin,
+            'action' => $action,
+            'fupdate' => 1,
+            'qzreferrer=https%3A%2F%2Fuser.qzone.qq.com%2F'.$uin.'%2Fmain'
+        );
+        $http_result = $this -> post('/right/cgi_black_action_new', $postdata, 'userRight');
+        if (is_numeric($http_result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$http_result); // 请求失败的话返回HTTP状态码
+        $result = $this -> cut("frameElement.callback","</script>",$http_result);
+        $arr = json_decode($result,1);
+        if($arr['subcode'] == 0) return array('code' => 1); //成功时 subcode返回的是0，失败-100或其他
+        return array('code' => 0,'msg' => $arr['message'] ?? $arr['msg'],'subcode' => $arr['subcode']);
+    }
+
+    private function post ($Path, $Params, $Type = 'user') {
         /*
             * 本文件中大部分QQ空间相关操作均为POST方式
             * Path: /cgi-bin之后的内容 以/开头
-            * Type: 默认为user:发布说说、删除说说、发表评论
+            * Type: 默认为user:发布说说、删除说说、发表评论、修改说说权限
+                    userRight: 设置QQ空间权限
                     upload：上传图片
             * Params array形式
         */
-        if ($Type == 'user') $url = 'https://user.qzone.qq.com/proxy/domain/taotao.qzone.qq.com/cgi-bin'.$Path.'?g_tk='.$this -> token;
-        elseif ($Type == 'upload') $url = 'https://up.qzone.qq.com/cgi-bin'.$Path.'?g_tk='.$this -> token;
+        if ($Type == 'user') $url = 'https://user.qzone.qq.com/proxy/domain/taotao.qzone.qq.com/cgi-bin'.$Path.'?g_tk='.$this -> g_tk;
+        elseif ($Type == 'userRight') $url = 'https://user.qzone.qq.com/proxy/domain/w.qzone.qq.com/cgi-bin'.$Path.'?g_tk='.$this -> g_tk;
+        elseif ($Type == 'upload') $url = 'https://up.qzone.qq.com/cgi-bin'.$Path.'?g_tk='.$this -> g_tk;
         else return array('code' => 0,'msg' => 'Invalid Type');
         $postdata = '';
         if(is_array($Params)) $postdata = http_build_query($Params);
@@ -265,6 +364,111 @@ class qzone {
         $postdata = rtrim($postdata, '&');
         $result = $this -> curl($url, $postdata);
         return $result;
+    }
+
+    private function getEmotionDetail($Tid) {
+        $uin = $this -> HostUin;
+        $path = '/emotion_cgi_msgdetail_v6';
+        $params = array(
+            'tid' => $Tid,
+            'uin' => $uin,
+            't1_source' => 1,
+            'not_trunc_con' => 1,
+            'need_right' => 1,
+            'not_adapt_outpic' => 1,
+            'g_tk' => $this -> g_tk
+        );
+        $query = http_build_query($params);
+        $url = 'https://h5.qzone.qq.com/proxy/domain/taotao.qq.com/cgi-bin' . $path . '?' . $query;
+        $result = $this -> curl($url);
+        if (is_numeric($result)) return array('code' => 0,'msg' => 'Req error Httpcode:'.$result, 'stage' => 'emotion_cgi_msgdetail_v6', 'httpCode' => (int)$result);
+        $arr = json_decode($this -> cut("Callback(", ");", $result), true);
+        if(!is_array($arr)) return array('code' => 0, 'msg' => 'Invalid detail response', 'stage' => 'emotion_cgi_msgdetail_v6');
+        if(($arr['subcode'] ?? $arr['code'] ?? -1) != 0)
+            return array('code' => 0, 'msg' => $arr['message'] ?? $arr['msg'] ?? 'Get detail failed', 'subcode' => $arr['subcode'] ?? null, 'stage' => 'emotion_cgi_msgdetail_v6');
+        return $arr;
+    }
+
+    private function buildUpdatePayloadFromDetail($detail) {
+        if(!is_array($detail) || !isset($detail['tid'])) return array('code' => 0, 'msg' => 'Detail missing tid');
+
+        $pics = (isset($detail['pic']) && is_array($detail['pic'])) ? $detail['pic'] : array();
+        $richtype = isset($detail['richtype']) ? (int)$detail['richtype'] : (empty($pics) ? 0 : 1);
+        $picTemplate = (string)($detail['pic_template'] ?? '');
+        $richvals = array();
+        $picBoItems = array();
+
+        foreach($pics as $pic) {
+            $picId = (string)($pic['pic_id'] ?? '');
+            if($picId === '') continue;
+
+            $picIdParts = explode(',', $picId);
+            $albumId = $picIdParts[1] ?? '';
+            $lloc = $picIdParts[2] ?? '';
+            if($albumId === '' || $lloc === '')
+                return array('code' => 0, 'msg' => 'Unsupported pic detail');
+
+            $sloc = $lloc;
+            $picType = (string)($pic['pictype'] ?? $pic['type'] ?? 22);
+            $height = (string)($pic['height'] ?? $pic['b_height'] ?? 0);
+            $width = (string)($pic['width'] ?? $pic['b_width'] ?? 0);
+            $richvals[] = ','.$albumId.','.$lloc.','.$sloc.','.$picType.','.$height.','.$width.',,0,0';
+
+            $bo = '';
+            foreach(array('smallurl', 'url1', 'url2', 'url3') as $urlKey) {
+                if(empty($pic[$urlKey])) continue;
+                if(preg_match('/(?:\\?|&)bo=([^&#]+)/', (string)$pic[$urlKey], $matches)) {
+                    $bo = rawurldecode($matches[1]);
+                    break;
+                }
+            }
+            if($bo !== '') $picBoItems[] = $bo;
+        }
+
+        if($richtype === 1 && empty($richvals)) return array('code' => 0, 'msg' => 'Image post missing pic info');
+
+        $content = (string)($detail['content'] ?? '');
+        if(isset($detail['conlist']) && is_array($detail['conlist']) && !empty($detail['conlist'])) {
+            $conParts = array();
+            foreach($detail['conlist'] as $conItem) {
+                if(isset($conItem['con'])) $conParts[] = (string)$conItem['con'];
+            }
+            if(!empty($conParts)) {
+                $content = implode('', $conParts);
+                if($content !== '' && strpos($content, "\n") !== 0) $content = "\n".$content;
+            }
+            $content = trim($content);
+        }
+
+        $subrichtype = $detail['t1_subtype'] ?? $detail['subrichtype'] ?? (empty($richvals) ? null : 1);
+        $picBo = '';
+        if(!empty($picBoItems)) {
+            $boGroup = implode(',', $picBoItems);
+            $picBo = $boGroup."\t".$boGroup;
+        }
+
+        $hostuin = (string)($detail['uin'] ?? $this -> HostUin);
+        return array(
+            'syn_tweet_verson' => 1,
+            'tid' => (string)$detail['tid'],
+            'paramstr' => 1,
+            'pic_template' => $picTemplate,
+            'richtype' => $richtype,
+            'richval' => empty($richvals) ? (string)($detail['richval'] ?? '') : implode("\t", $richvals),
+            'special_url' => (string)($detail['special_url'] ?? ''),
+            'subrichtype' => $subrichtype,
+            'pic_bo' => $picBo,
+            'con' => $content,
+            'feedversion' => (string)($detail['feedversion'] ?? 1),
+            'ver' => (string)($detail['ver'] ?? 1),
+            'ugc_right' => (int)($detail['ugc_right'] ?? 1),
+            'to_sign' => (int)($detail['to_sign'] ?? 0),
+            'ugcright_id' => (string)($detail['ugcright_id'] ?? $detail['tid']),
+            'hostuin' => $hostuin,
+            'code_version' => (string)($detail['code_version'] ?? 1),
+            'format' => 'fs',
+            'qzreferrer' => 'https://user.qzone.qq.com/'.$hostuin
+        );
     }
 
     private function curl($url,$data=null) {
@@ -280,8 +484,8 @@ class qzone {
         $cu[CURLOPT_RETURNTRANSFER] = true;
         $cu[CURLOPT_FOLLOWLOCATION] = true;
         if($data):
-          $cu[CURLOPT_POST] = true;
-          $cu[CURLOPT_POSTFIELDS] = $data;
+            $cu[CURLOPT_POST] = true;
+            $cu[CURLOPT_POSTFIELDS] = $data;
         endif;
         $cu[CURLOPT_HTTPHEADER] = array("Cookie: ".$this -> Cookies);
         if($this -> isJson($data)) $cu[CURLOPT_HTTPHEADER][] = "Content-Type: application/json";
@@ -293,13 +497,13 @@ class qzone {
         $content = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         if ($httpCode != 200) {
-          return $httpCode;
+            return $httpCode;
         }
         curl_close($ch);
         return $content;
-      }
+    }
     
-      private function cut($begin,$end,$str){
+    private function cut($begin,$end,$str){
         $b = mb_strpos($str,$begin) + mb_strlen($begin);
         $e = mb_strpos($str,$end) - $b;
         return mb_substr($str,$b,$e);

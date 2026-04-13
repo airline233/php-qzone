@@ -6,6 +6,8 @@ $instance = new qzone($apiaddr, $token);
 $imgfile = base64_encode(file_get_contents('test.jpg'));
 $richval = $instance -> upload($imgfile);
 $tid = $instance -> publish('test11',1,$richval."\t".$richval); //可以多张图 用\t分隔 一张图片的richval可以复用
+print_r($instance -> updateRight($tid,64)); //改为仅自己可见
+print_r($instance -> updateRight($tid,16,'10001|10002')); //改为部分好友可见
 $richval = $instance -> upload($imgfile,'base64','url');
 print_r($instance -> comment($tid,'测试带图评论1',1,$richval));
 print_r($instance -> comment($tid,'测试普通评论1'));
